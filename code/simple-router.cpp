@@ -24,6 +24,9 @@ namespace simple_router {
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 // IMPLEMENT THIS METHOD
+
+const broadcase_host[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+
 void
 SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
 {
@@ -38,6 +41,42 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
   std::cerr << getRoutingTable() << std::endl;
 
   // FILL THIS IN
+    struct ethernet_hdr ethernetHdr;
+    getEthernetHeader(packet, ethernetHdr);
+    if(ethernetHdr.ether_dhost != broadcase_host && findIfaceByMac(ethernetHdr.ether_dhost) == nullptr ){
+        std::cerr << "Ethernet destination is not in this router, ignoring" << std::endl;
+        return;
+    }
+
+}
+
+void
+SimpleRouter::getARPHeader(const simple_router::Buffer &packet, struct simple_router::arp_hdr &a_hdr) {
+
+}
+
+void
+SimpleRouter::getEthernetHeader(const simple_router::Buffer &packet, struct simple_router::ethernet_hdr &eth_hdr) {
+    memcpy(&eth_hdr, &packet[0], sizeof(eth_hdr))
+}
+
+
+void
+SimpleRouter::getIPV4Header(const simple_router::Buffer &packet, struct simple_router::ip_hdr &ipv4_hdr) {
+
+}
+
+
+void
+SimpleRouter::handleArpPacket(const simple_router::Buffer &packet, const std::string &inIface,
+                              struct simple_router::ethernet_hdr &ether_hdr) {
+
+}
+
+
+void
+SimpleRouter::handleIPv4Packet(const simple_router::Buffer &packet, const std::string &Iface,
+                               struct simple_router::ethernet_hdr &ether_hdr) {
 
 }
 //////////////////////////////////////////////////////////////////////////

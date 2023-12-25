@@ -104,6 +104,37 @@ public:
    */
   const Interface*
   findIfaceByName(const std::string& name) const;
+  //==========Custom Functions==========//
+    /**
+     * Get Ethernet header
+     */
+    void
+    getEthernetHeader(const Buffer& packet, struct ethernet_hdr& eth_hdr);
+
+    /**
+     * Get Ethernet header
+     */
+    void
+    getIPV4Header(const Buffer& packet, struct ip_hdr& ipv4_hdr);
+
+    /**
+     * Get ARP header
+     */
+    void
+    getARPHeader(const Buffer& packet, struct arp_hdr& a_hdr);
+    /**
+     * handle IPv4 packet
+     */
+    void
+    handleIPv4Packet(const Buffer& packet, const std::string& Iface, struct ethernet_hdr& ether_hdr);
+
+    /**
+     * handle ARP packet
+     */
+    void
+    handleArpPacket(const Buffer& packet, const std::string& inIface, struct ethernet_hdr& ether_hdr);
+
+
 
 private:
   ArpCache m_arp;
