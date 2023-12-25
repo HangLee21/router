@@ -115,39 +115,39 @@ public:
      * Get Ethernet header
      */
     struct ip_hdr*
-    getIPV4Header(struct simple_router::ethernet_hdr *ethe_header);
+    getIPV4Header(const struct simple_router::ethernet_hdr *ethe_header);
 
     /**
      * Get ARP header
      */
     struct arp_hdr*
-    getARPHeader(struct simple_router::ethernet_hdr *ethe_header);
+    getARPHeader(const struct simple_router::ethernet_hdr *ethe_header);
     /**
      * handle IPv4 packet
      */
     void
-    handleIPV4Packet(const Buffer& packet, const std::string& Iface, struct ethernet_hdr* ether_hdr);
+    handleIPV4Packet(const Buffer& packet, const std::string& Iface, const struct simple_router::ethernet_hdr* ether_hdr);
 
     /**
      * handle ARP packet
      */
     void
-    handleARPPacket(const Buffer& packet, const std::string& inIface, struct ethernet_hdr* ether_hdr);
+    handleARPPacket(const Buffer& packet, const std::string& inIface, const struct ethernet_hdr* ether_hdr);
     /**
      * make ARP packet
      */
     Buffer 
-    makeArpPacket(ethernet_hdr ethe_request, arp_hdr arp_request);
+    makeArpPacket(ethernet_hdr ethe_request, const arp_hdr arp_request);
     /**
      * make ARP header
      */
     arp_hdr 
-    makeArpHeader(enum arp_opcode type, arp_hdr* a_hdr, Interface* iface);
+    makeArpHeader(enum arp_opcode type, const arp_hdr* a_hdr, const Interface* iface);
     /**
      * make Ethernet header
      */
     ethernet_hdr 
-    makeEthernetHeader(ethernet_hdr* e_hdr, Interface* iface);
+    makeEthernetHeader(const ethernet_hdr* e_hdr, const Interface* iface);
 
 
 
