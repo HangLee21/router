@@ -39,7 +39,7 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
   }
 
   std::cerr << getRoutingTable() << std::endl;
-
+  std::cerr << "handle packet" << std::endl;
   // FILL THIS IN
     struct ethernet_hdr* ethernetHdr = getEthernetHeader(packet);
     Buffer buffer(ethernetHdr->ether_dhost, ethernetHdr->ether_dhost + 6);
@@ -123,7 +123,35 @@ SimpleRouter::handleARPPacket(const simple_router::Buffer &packet, const std::st
 void
 SimpleRouter::handleIPV4Packet(const Buffer& packet, const std::string& Iface, 
       const struct simple_router::ethernet_hdr* ether_hdr){
+    ip_hdr * ipHdr = getIPV4Header(ether_hdr);
+    uint16_t ip_sum = ipHdr.ip_sum;
+    ipHdr.ip_sum = 0x0000;
+    uint16_t ck_sum = cksum(&ipHdr, sizeof(ip_hdr));
+    // check sum
+    if(ip_sum != ck_sum){
+        std::cerr << ck_sum << ' ' << ip_sum << std::endl;
+        std::cerr << "sum not correct";
+        return;
+    }
 
+    // check if destined to the router
+    const Interface *iface = findIfaceByIp(ipHdr->ip_dst);
+
+    if(iface == nullptr){
+        RoutingTableEntry route_entry = m_routingTable.lookup(ntohl(ipHdr->ip_dst));
+
+        ipHdr->ip_ttl--;
+        if(ipHdr->ip_ttl == 0){
+            // TODO
+        }
+        else{
+            // TODO
+        }
+
+    }
+    else{
+
+    }
 }
 
 
