@@ -25,7 +25,7 @@ namespace simple_router {
 //////////////////////////////////////////////////////////////////////////
 // IMPLEMENT THIS METHOD
 
-const broadcase_host[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+const Buffer broadcase_host = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
 void
 SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
@@ -41,54 +41,81 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
   std::cerr << getRoutingTable() << std::endl;
 
   // FILL THIS IN
-    struct ethernet_hdr* ethernetHdr = nullptr;
-    getEthernetHeader(packet, ethernetHdr);
-    if(ethernetHdr.ether_dhost != broadcase_host && findIfaceByMac(ethernetHdr.ether_dhost) == nullptr ){
+    struct ethernet_hdr* ethernetHdr = getEthernetHeader(packet);
+    Buffer buffer(ethernetHdr->ether_dhost, ethernetHdr->ether_dhost + 6)
+    if(buffer != broadcase_host && findIfaceByMac(buffer) == nullptr ){
         std::cerr << "Ethernet destination is not in this router, ignoring" << std::endl;
         return;
     }
 
 
-    if(etherHdr.ether_type == ntohs(0x0800)) {
+    if(etherHdr->ether_type == ntohs(ethertype_ip)) {
         handleIPV4Packet(packet, inIface, ether_hdr);
     }
 
-    if(etherHdr.ether_type == ntohs(0x0806)) {
+    if(etherHdr->ether_type == ntohs(ethertype_arp)) {
         handleARPPacket(packet, inIface, ether_hdr);
     }
 }
 
 struct arp_hdr*
-SimpleRouter::getARPHeader(const simple_router::Buffer &packet) {
-
+SimpleRouter::getARPHeader(struct simple_router::ethernet_hdr *ethe_header) {
+    return (arp_hdr *)((unsigned char *)ethe_header + sizeof(ethernet_hdr));
 }
 
 struct ethernet_hdr*
 SimpleRouter::getEthernetHeader(const simple_router::Buffer &packet) {
-
+    return (ethernet_hdr *)packet.data();
 }
 
 
 struct ip_hdr*
-SimpleRouter::getIPV4Header(const simple_router::Buffer &packet) {
-
+SimpleRouter::getIPV4Header(struct simple_router::ethernet_hdr *ethe_header) {
+    return (ip_hdr *)((unsigned char *)ethe_header + sizeof(ethernet_hdr));
 }
 
 
 void
 SimpleRouter::handleARPPacket(const simple_router::Buffer &packet, const std::string &inIface,
                               struct simple_router::ethernet_hdr *ether_hdr) {
-    struct arp_hdr* arpHdr = getARPHeader(packet)
+    struct arp_hdr* arpHdr = getARPHeader(ether_hdr);
     const Interface* iface = findIfaceByName(inIface);
     // request
-    if(arpHdr.arp_op == ntohs(0x0001)){
+    if(arpHdr->arp_op == ntohs(arp_op_request)){
         if(iface->ip != arpHdr->arp_tip){
-
+          std::cerr << "Interface Ip is not equal to arp target ip, ignoring" << std::endl;
+          return;
         }
+
+        struct a_hdr = makeArpHeader(arp_op_reply, arpHdr, iface);
+        struct e_hdr = makeEthernetHeader(ether_hdr, iface);
+        Buffer packet_reply = makeArpPacket(e_hdr, a_hdr);
+
+        print_hdrs(packet_reply);
+        sendPacket(packet_reply, inIface);
     }
     // reply
-    else if(arpHdr->arp_op == ntohs(0x0002)){
-
+    else if(arpHdr->arp_op == ntohs(arp_op_reply)){
+        Buffer sha(arpHdr->arp_sha, arpHdr->arp_sha + 6);
+        std::shared_ptr<ArpRequest> arp_entry = m_arp.lookup(arpHdr->arp_sip);
+        if (arp_entry == nullptr)
+        {
+            std::shared_ptr<ArpRequest> arp_req = m_arp.insertArpEntry(*sha, arpHdr.arp_sip);
+            if(arp_req == nullptr){
+                std::cerr << "No pending request" << std::endl;
+                return;
+            }
+            else{
+                for (auto it = arp_req->packets.begin(); it != arp_req->packets.end(); it++){
+                    ethernet_hdr *ethe_header = (ethernet_hdr *)(it->packet.data());
+                    std::copy(sha->begin(), sha->end(), ethe_header->ether_dhost);
+                    sendPacket(it->packet, it->iface);
+                    std::cerr << "Send Packet" << std::endl;
+                    print_hdrs(it->packet);
+                }
+                m_arp.removeRequest(arp_req);
+            }
+        }
     }
 }
 
@@ -97,6 +124,37 @@ void
 SimpleRouter::handleIPv4Packet(const simple_router::Buffer &packet, const std::string &Iface,
                                struct simple_router::ethernet_hdr *ether_hdr) {
 
+}
+
+
+arp_hdr 
+SimpleRouter::makeArpHeader(enum arp_opcode type, arp_hdr* a_ptr, Interface* iface){
+  arp_hdr arp_hdr(*a_ptr);
+  arp_hdr.arp_op = ntohs(type);
+  memcpy(&a_hdr.arp_tip, &a_hdr.arp_sip, sizeof(a_hdr.arp_tip));
+  memcpy(a_hdr.arp_tha, a_hdr.arp_sha, sizeof(a_hdr.arp_tha));
+  memcpy(&a_hdr.arp_sip, &iface->ip, sizeof(a_hdr.arp_sip));
+  memcpy(a_hdr.arp_sha, (iface->addr).data(), sizeof(a_hdr.arp_sha));
+
+  return arp_hdr;
+}
+
+ethernet_hdr
+SimpleRouter::makeEthernetHeader(ethernet_hdr* e_ptr, Interface* iface){
+    ethernet_hdr ether_hdr(*e_ptr);
+
+    memcpy(ether_hdr.ether_dhost, ether_hdr.ether_shost, sizeof(ether_hdr.ether_dhost));
+    memcpy(ether_hdr.ether_shost, (iface->addr).data(), sizeof(ether_hdr.ether_shost));
+
+    return ethernet_hdr;
+}
+
+Buffer 
+SimpleRouter::makeArpPacket(ethernet_hdr ethe_request, arp_hdr arp_request){
+    Buffer packet;
+    packet.insert(packet.end(), (unsigned char *)&ethe_request, (unsigned char *)&ethe_request + sizeof(ethe_request));
+    packet.insert(packet.end(), (unsigned char *)&arp_request, (unsigned char *)&arp_request + sizeof(arp_request));
+    return packet;
 }
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////

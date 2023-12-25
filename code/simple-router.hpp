@@ -115,13 +115,13 @@ public:
      * Get Ethernet header
      */
     struct ip_hdr*
-    getIPV4Header(const Buffer& packet);
+    getIPV4Header(struct simple_router::ethernet_hdr *ethe_header);
 
     /**
      * Get ARP header
      */
     struct arp_hdr*
-    getARPHeader(const Buffer& packet);
+    getARPHeader(struct simple_router::ethernet_hdr *ethe_header);
     /**
      * handle IPv4 packet
      */
@@ -133,6 +133,21 @@ public:
      */
     void
     handleARPPacket(const Buffer& packet, const std::string& inIface, struct ethernet_hdr* ether_hdr);
+    /**
+     * make ARP packet
+     */
+    Buffer 
+    makeArpPacket(ethernet_hdr ethe_request, arp_hdr arp_request);
+    /**
+     * make ARP header
+     */
+    arp_hdr 
+    makeArpHeader(enum arp_opcode type, arp_hdr* a_hdr, Interface* iface);
+    /**
+     * make Ethernet header
+     */
+    ethernet_hdr 
+    makeEthernetHeader(ethernet_hdr* e_hdr, Interface* iface);
 
 
 
