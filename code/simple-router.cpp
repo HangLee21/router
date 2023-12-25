@@ -41,42 +41,61 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
   std::cerr << getRoutingTable() << std::endl;
 
   // FILL THIS IN
-    struct ethernet_hdr ethernetHdr;
+    struct ethernet_hdr* ethernetHdr = nullptr;
     getEthernetHeader(packet, ethernetHdr);
     if(ethernetHdr.ether_dhost != broadcase_host && findIfaceByMac(ethernetHdr.ether_dhost) == nullptr ){
         std::cerr << "Ethernet destination is not in this router, ignoring" << std::endl;
         return;
     }
 
+
+    if(etherHdr.ether_type == ntohs(0x0800)) {
+        handleIPV4Packet(packet, inIface, ether_hdr);
+    }
+
+    if(etherHdr.ether_type == ntohs(0x0806)) {
+        handleARPPacket(packet, inIface, ether_hdr);
+    }
 }
 
-void
-SimpleRouter::getARPHeader(const simple_router::Buffer &packet, struct simple_router::arp_hdr &a_hdr) {
-
-}
-
-void
-SimpleRouter::getEthernetHeader(const simple_router::Buffer &packet, struct simple_router::ethernet_hdr &eth_hdr) {
-    memcpy(&eth_hdr, &packet[0], sizeof(eth_hdr))
-}
-
-
-void
-SimpleRouter::getIPV4Header(const simple_router::Buffer &packet, struct simple_router::ip_hdr &ipv4_hdr) {
+struct arp_hdr*
+SimpleRouter::getARPHeader(const simple_router::Buffer &packet) {
 
 }
 
+struct ethernet_hdr*
+SimpleRouter::getEthernetHeader(const simple_router::Buffer &packet) {
+
+}
+
+
+struct ip_hdr*
+SimpleRouter::getIPV4Header(const simple_router::Buffer &packet) {
+
+}
+
 
 void
-SimpleRouter::handleArpPacket(const simple_router::Buffer &packet, const std::string &inIface,
-                              struct simple_router::ethernet_hdr &ether_hdr) {
+SimpleRouter::handleARPPacket(const simple_router::Buffer &packet, const std::string &inIface,
+                              struct simple_router::ethernet_hdr *ether_hdr) {
+    struct arp_hdr* arpHdr = getARPHeader(packet)
+    const Interface* iface = findIfaceByName(inIface);
+    // request
+    if(arpHdr.arp_op == ntohs(0x0001)){
+        if(iface->ip != arpHdr->arp_tip){
 
+        }
+    }
+    // reply
+    else if(arpHdr->arp_op == ntohs(0x0002)){
+
+    }
 }
 
 
 void
 SimpleRouter::handleIPv4Packet(const simple_router::Buffer &packet, const std::string &Iface,
-                               struct simple_router::ethernet_hdr &ether_hdr) {
+                               struct simple_router::ethernet_hdr *ether_hdr) {
 
 }
 //////////////////////////////////////////////////////////////////////////

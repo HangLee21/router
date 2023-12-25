@@ -108,31 +108,31 @@ public:
     /**
      * Get Ethernet header
      */
-    void
-    getEthernetHeader(const Buffer& packet, struct ethernet_hdr& eth_hdr);
+    struct ethernet_hdr*
+    getEthernetHeader(const Buffer& packet);
 
     /**
      * Get Ethernet header
      */
-    void
-    getIPV4Header(const Buffer& packet, struct ip_hdr& ipv4_hdr);
+    struct ip_hdr*
+    getIPV4Header(const Buffer& packet);
 
     /**
      * Get ARP header
      */
-    void
-    getARPHeader(const Buffer& packet, struct arp_hdr& a_hdr);
+    struct arp_hdr*
+    getARPHeader(const Buffer& packet);
     /**
      * handle IPv4 packet
      */
     void
-    handleIPv4Packet(const Buffer& packet, const std::string& Iface, struct ethernet_hdr& ether_hdr);
+    handleIPV4Packet(const Buffer& packet, const std::string& Iface, struct ethernet_hdr* ether_hdr);
 
     /**
      * handle ARP packet
      */
     void
-    handleArpPacket(const Buffer& packet, const std::string& inIface, struct ethernet_hdr& ether_hdr);
+    handleARPPacket(const Buffer& packet, const std::string& inIface, struct ethernet_hdr* ether_hdr);
 
 
 
