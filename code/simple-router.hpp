@@ -134,11 +134,6 @@ public:
     void
     handleARPPacket(const Buffer& packet, const std::string& inIface, const struct ethernet_hdr* ether_hdr);
     /**
-     * make ARP packet
-     */
-    Buffer 
-    makeArpPacket(ethernet_hdr ethe_request, const arp_hdr arp_request);
-    /**
      * make ARP header
      */
     arp_hdr 
@@ -148,6 +143,42 @@ public:
      */
     ethernet_hdr 
     makeEthernetHeader(const ethernet_hdr* e_hdr, const Interface* iface);
+    /**
+     * make IPV4 header
+     */
+     ip_hdr
+     makeIPV4Header(enum ip_protocol, const ip_hdr* ipHdr, const Interface* iface);
+    /**
+     * make Icmp header
+     */
+     icmp_hdr
+     makeIcmpHeader(enum icmptype, enum icmpcode, const uint8_t* );
+    /**
+     * make Icmp header
+     */
+     icmp_t3_hdr
+     makeIcmpT3Header(enum icmptype, enum icmpcode, const uint8_t* );
+    /**
+     * make ARP packet
+     */
+     Buffer
+     makeArpPacket(ethernet_hdr ethe_request, arp_hdr arp_request);
+    /**
+     * make ARP packet
+     */
+     Buffer
+     makeIcmpT3Packet(ethernet_hdr, ip_hdr, icmp_t3_hdr);
+    /**
+     * make ARP packet
+     */
+     uint16_t
+     getIpSum(ip_hdr*);
+    /**
+     * make ARP packet
+     */
+     uint16_t
+     getIcmpT3Sum(icmp_t3_hdr*);
+
 
 
 

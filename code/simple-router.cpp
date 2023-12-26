@@ -93,6 +93,8 @@ SimpleRouter::handleARPPacket(const simple_router::Buffer &packet, const std::st
 
         print_hdrs(packet_reply);
         sendPacket(packet_reply, inIface);
+        std::cerr << "Send Arp packet in request" << std::endl;
+        print_hdrs(packet_reply);
     }
     // reply
     else if(arpHdr->arp_op == ntohs(arp_op_reply)){
@@ -110,7 +112,7 @@ SimpleRouter::handleARPPacket(const simple_router::Buffer &packet, const std::st
                     ethernet_hdr *ethe_header = (ethernet_hdr *)(it->packet.data());
                     std::copy(sha.begin(), sha.end(), ethe_header->ether_dhost);
                     sendPacket(it->packet, it->iface);
-                    std::cerr << "Send Packet" << std::endl;
+                    std::cerr << "Send Arp packet in reply" << std::endl;
                     print_hdrs(it->packet);
                 }
                 m_arp.removeRequest(arp_req);
@@ -124,12 +126,11 @@ void
 SimpleRouter::handleIPV4Packet(const Buffer& packet, const std::string& Iface, 
       const struct simple_router::ethernet_hdr* ether_hdr){
     ip_hdr * ipHdr = getIPV4Header(ether_hdr);
-    uint16_t ip_sum = ipHdr.ip_sum;
-    ipHdr.ip_sum = 0x0000;
-    uint16_t ck_sum = cksum(&ipHdr, sizeof(ip_hdr));
+    uint16_t ck_sum = getIpSum(ipHdr);
+    ipHdr->ip_sum = ip_sum;
     // check sum
-    if(ip_sum != ck_sum){
-        std::cerr << ck_sum << ' ' << ip_sum << std::endl;
+    if(ipHdr->ip_sum != ck_sum){
+        std::cerr << ck_sum << ' ' << ipHdr->ip_sum << std::endl;
         std::cerr << "sum not correct";
         return;
     }
@@ -138,19 +139,55 @@ SimpleRouter::handleIPV4Packet(const Buffer& packet, const std::string& Iface,
     const Interface *iface = findIfaceByIp(ipHdr->ip_dst);
 
     if(iface == nullptr){
-        RoutingTableEntry route_entry = m_routingTable.lookup(ntohl(ipHdr->ip_dst));
-
         ipHdr->ip_ttl--;
-        if(ipHdr->ip_ttl == 0){
-            // TODO
+        if(ipHdr->ip_ttl <= 0){
+            struct ethernet_hdr ethernetHdr = makeEthernetHeader(ether_hdr, iface);
+            struct ip_hdr ipHdr1 = makeIPV4Header(ip_protocol_icmp, ipHdr, iface);
+            struct icmp_t3_hdr icmpT3Hdr = makeIcmpT3Header(icmp_type_time_exceeded, icmp_code_time_exceeded, ipHdr);
+
+            ipHdr1.ip_len = htons(sizeof(ip_hdr) + sizeof(icmp_t3_hdr));
+            ipHdr1.ip_sum = getIpSum(&ipHdr1);
+
+            Buffer buffer_reply = makeIcmpT3Packet(ethernetHdr, ipHdr1, icmpT3Hdr);
+            sendPacket(buffer_reply, Iface);
+            std::cerr << "Send Icmp t3 packet in time exceed" << std::endl;
+            print_hdrs(packet);
+            return;
         }
         else{
-            // TODO
+            RoutingTableEntry route_entry = m_routingTable.lookup(ntohl(ipHdr->ip_dst));
+            ipHdr->ip_sum = getIpSum(&ipHdr);
+            const Interface * iface_ptr = findIfaceByName(route_entry.ifName);
+
+            std::copy(ether_hdr->ether_shost, ether_hdr->ether_shost + 6, ether_hdr->ether_dhost);
+            std::copy(iface_ptr->addr.begin(), iface_ptr->addr.end(), ether_hdr->ether_shost);
+
+            std::shared_ptr<simple_router::ArpEntry> arp_entry;
+            uint32_t targetIp;
+            // TODO ??? why need this
+            if(route_entry.ifName=="sw0-eth3"){
+                arp_entry = m_arp.lookup(route_entry.gw);
+                targetIp = route_entry.gw;
+            }
+            else{
+                arp_entry = m_arp.lookup(ip_header->ip_dst);
+                targetIp = ip_header->ip_dst;
+            }
+
+            if(arp_entry == nullptr){
+                m_arp.queueRequest(targetIp, packet, route_entry.ifName);
+            }
+            else{
+                std::copy(arp_entry->mac.begin(), arp_entry->mac.end(), ether_hdr->ether_dhost);
+                sendPacket(packet, route_entry.ifName);
+                std::cerr << "Send IPv4 in iface is nullptr" << std::endl;
+                print_hdrs(packet);
+            }
         }
 
     }
     else{
-
+        // TODO
     }
 }
 
@@ -159,10 +196,10 @@ arp_hdr
 SimpleRouter::makeArpHeader(enum arp_opcode type, const arp_hdr* a_ptr, const Interface* iface){
   arp_hdr a_hdr(*a_ptr);
   a_hdr.arp_op = ntohs(type);
-  memcpy(&a_hdr.arp_tip, &a_hdr.arp_sip, sizeof(a_hdr.arp_tip));
-  memcpy(a_hdr.arp_tha, a_hdr.arp_sha, sizeof(a_hdr.arp_tha));
-  memcpy(&a_hdr.arp_sip, &iface->ip, sizeof(a_hdr.arp_sip));
-  memcpy(a_hdr.arp_sha, (iface->addr).data(), sizeof(a_hdr.arp_sha));
+  a_hdr.arp_tip = a_ptr->arp_sip;
+  a_hdr.arp_sip = iface->ip;
+  a_hdr.arp_tha = a_ptr->arp_sha;
+  a_hdr.arp_sha = (iface->addr).data();
 
   return a_hdr;
 }
@@ -170,11 +207,39 @@ SimpleRouter::makeArpHeader(enum arp_opcode type, const arp_hdr* a_ptr, const In
 ethernet_hdr
 SimpleRouter::makeEthernetHeader(const ethernet_hdr* e_ptr, const Interface* iface){
     ethernet_hdr ether_hdr(*e_ptr);
-
-    memcpy(ether_hdr.ether_dhost, ether_hdr.ether_shost, sizeof(ether_hdr.ether_dhost));
-    memcpy(ether_hdr.ether_shost, (iface->addr).data(), sizeof(ether_hdr.ether_shost));
+    ether_hdr.ether_dhost = e_ptr->ether_shost;
+    ether_hdr.ether_shost = (iface->addr).data()
 
     return ether_hdr;
+}
+
+ip_hdr
+SimpleRouter::makeIPV4Header(enum simple_router::ip_protocol ip_p, const simple_router::ip_hdr *ip_ptr,
+                             const simple_router::Interface *iface) {
+    ip_hdr ipHdr(*ip_ptr);
+    ipHdr.ip_p = ip_p;
+    ipHdr.ip_src = iface->ip;
+    ipHdr.ip_dst = ip_ptr->ip_src;
+
+    return  ipHdr;
+}
+
+icmp_hdr
+SimpleRouter::makeIcmpHeader(enum simple_router::icmptype type, enum simple_router::icmpcode code,
+                             const uint8_t * ip_ptr) {
+
+}
+
+icmp_t3_hdr
+SimpleRouter::makeIcmpT3Header(enum simple_router::icmptype type, enum simple_router::icmpcode code,
+                               const uint8_t * data) {
+    icmp_t3_hdr icmpT3Hdr;
+    icmpT3Hdr.icmp_code = code;
+    icmpT3Hdr.icmp_type = type;
+    std::copy(data, data + ICMP_DATA_SIZE, icmpT3Hdr.data);
+    icmpT3Hdr.icmp_sum = getIcmpT3Sum(&icmpT3Hdr);
+
+    return icmpT3Hdr;
 }
 
 Buffer 
@@ -183,6 +248,35 @@ SimpleRouter::makeArpPacket(ethernet_hdr ethe_request, arp_hdr arp_request){
     packet.insert(packet.end(), (unsigned char *)&ethe_request, (unsigned char *)&ethe_request + sizeof(ethe_request));
     packet.insert(packet.end(), (unsigned char *)&arp_request, (unsigned char *)&arp_request + sizeof(arp_request));
     return packet;
+}
+
+Buffer
+SimpleRouter::makeIcmpT3Packet(simple_router::ethernet_hdr ethernetHdr, simple_router::ip_hdr ipHdr,
+                               simple_router::icmp_t3_hdr icmpT3Hdr) {
+    Buffer packet;
+    packet.insert(packet.end(), (unsigned char *)&ethernetHdr, (unsigned char *)&ethernetHdr + sizeof(ethernet_hdr));
+    packet.insert(packet.end(), (unsigned char *)&ipHdr, (unsigned char *)&ipHdr + sizeof(ip_hdr));
+    packet.insert(packet.end(), (unsigned char *)&icmpT3Hdr, (unsigned char *)&icmpT3Hdr + sizeof(icmp_t3_hdr));
+    return packet;
+}
+
+uint16_t
+SimpleRouter::getIpSum(simple_router::ip_hdr * ip_ptr) {
+    uint16_t ip_sum = ip_ptr->ip_sum;
+    ipHdr->ip_sum = 0x0000;
+    uint16_t ck_sum = cksum(ip_ptr, sizeof(ip_hdr));
+    ip_ptr->ip_sum = ip_sum;
+    return ck_sum;
+}
+
+
+uint16_t
+SimpleRouter::getIcmpT3Sum(simple_router::icmp_t3_hdr * icmp_t3_ptr) {
+    uint16_t icmp_sum = icmp_t3_ptr->icmp_sum;
+    icmp_t3_ptr->icmp_sum = 0x0000;
+    uint16_t ck_sum = cksum(icmp_t3_ptr, sizeof(icmp_t3_hdr));
+    icmp_t3_ptr->icmp_sum = icmp_sum;
+    return ck_sum;
 }
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////

@@ -133,6 +133,20 @@ enum arp_opcode {
   arp_op_reply = 0x0002,
 };
 
+enum icmptype {
+    icmp_type_echo_reply = 0x0000,
+    icmp_type_echo_request = 0x0008,
+    icmp_type_time_exceeded = 0x000B,
+    icmp_type_port_unreachable = 0x0003
+};
+
+enum icmpcode {
+    icmp_code_time_exceeded = 0x0000,
+    icmp_code_fragment_reassembly_time_exceeded = 0x0001,
+    icmp_code_destination_host_unreachable = 0x0001,
+    icmp_code_destination_port_unreachable = 0x0003,
+};
+
 enum arp_hrd_fmt {
   arp_hrd_ethernet = 0x0001,
 };
