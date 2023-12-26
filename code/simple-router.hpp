@@ -172,6 +172,11 @@ public:
      Buffer
      makeIcmpT3Packet(ethernet_hdr, ip_hdr, icmp_t3_hdr);
     /**
+     * make IcmpT3 packet
+     */
+     Buffer
+     makeIPV4Packet(ethernet_hdr, ip_hdr);
+    /**
      * get Ip sum
      */
      uint16_t
