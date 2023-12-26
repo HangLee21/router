@@ -68,6 +68,11 @@ SimpleRouter::getEthernetHeader(const simple_router::Buffer &packet) {
     return (ethernet_hdr *)packet.data();
 }
 
+struct icmp_hdr*
+SimpleRouter::getICMPHeader(const struct simple_router::ip_hdr * ip_ptr) {
+    return (icmp_hdr *)((unsigned char *)ip_header + sizeof(ip_hdr));
+}
+
 
 struct ip_hdr*
 SimpleRouter::getIPV4Header(const struct simple_router::ethernet_hdr *ethe_header) {
@@ -143,7 +148,7 @@ SimpleRouter::handleIPV4Packet(const Buffer& packet, const std::string& Iface,
         if(ipHdr->ip_ttl <= 0){
             struct ethernet_hdr ethernetHdr = makeEthernetHeader(ether_hdr, iface);
             struct ip_hdr ipHdr1 = makeIPV4Header(ip_protocol_icmp, ipHdr, iface);
-            struct icmp_t3_hdr icmpT3Hdr = makeIcmpT3Header(icmp_type_time_exceeded, icmp_code_time_exceeded, ipHdr);
+            struct icmp_t3_hdr icmpT3Hdr = makeIcmpT3Header(icmp_type_time_exceeded, icmp_code_time_exceeded, (uint8_t*)ipHdr);
 
             ipHdr1.ip_len = htons(sizeof(ip_hdr) + sizeof(icmp_t3_hdr));
             ipHdr1.ip_sum = getIpSum(&ipHdr1);
@@ -187,7 +192,49 @@ SimpleRouter::handleIPV4Packet(const Buffer& packet, const std::string& Iface,
 
     }
     else{
-        // TODO
+        if(ipHdr->ip_p == ip_protocol_icmp){
+            icmp_hdr* icmp_ptr = getICMPHeader(ipHdr);
+            // TODO why need to minus 20
+            if(icmp_ptr->icmp_type == icmp_type_echo_request){
+                const uint16_t icmp_size = ntohs(ipHdr->ip_len) - 20;
+                uint16_t ck_sum = getIcmpSum(icmp_ptr, icmp_size);
+
+                if(ck_sum != icmp_ptr->icmp_sum){
+                    std::cerr<<"sum not correct in icmp"<<std::endl;
+                    return;
+                }
+
+                icmp_ptr->icmp_type = icmp_type_echo_reply;
+                icmp_ptr->icmp_sum = getIcmpSum(icmp_ptr, icmp_size);
+                uint32_t dst = ipHdr->ip_dst;
+                ipHdr->ip_dst = ipHdr->ip_src;
+                ipHdr->ip_src = dst;
+                ipHdr->ip_ttl = 64;
+
+                std::copy(ether_hdr->ether_shost, ether_hdr->ether_shost + 6, ether_hdr->ether_dhost);
+                std::copy(iface->addr.begin(), iface->addr.end(), ether_hdr->ether_shost);
+
+                ipHdr->ip_sum = getIpSum(ipHdr);
+
+                sendPacket(packet, Iface);
+                std::cerr << "Send Icmp in iface is not nullptr" << std::endl;
+                print_hdrs(packet);
+            }
+        }
+        else if(ipHdr->ip_p == ip_protocol_tcp || ipHdr->ip_p == ip_protocol_udp){
+            struct ethernet_hdr ethernetHdr = makeEthernetHeader(ether_hdr, iface);
+            struct ip_hdr ipHdr1 = makeIPV4Header(ip_protocol_icmp, ipHdr, iface);
+            struct icmp_t3_hdr icmpT3Hdr = makeIcmpT3Header(icmp_type_port_unreachable, icmp_code_destination_port_unreachable, (uint8_t*)ipHdr);
+
+            ipHdr1.ip_len = htons(sizeof(ip_hdr) + sizeof(icmp_t3_hdr));
+            ipHdr1.ip_sum = getIpSum(&ipHdr1);
+
+            Buffer buffer_reply = makeIcmpT3Packet(ethernetHdr, ipHdr1, icmpT3Hdr);
+            sendPacket(buffer_reply, Iface);
+            std::cerr << "Send Icmp t3 packet in time exceed" << std::endl;
+            print_hdrs(packet);
+            return;
+        }
     }
 }
 
@@ -261,10 +308,10 @@ SimpleRouter::makeIcmpT3Packet(simple_router::ethernet_hdr ethernetHdr, simple_r
 }
 
 uint16_t
-SimpleRouter::getIpSum(simple_router::ip_hdr * ip_ptr) {
+SimpleRouter::getIpSum(simple_router::ip_hdr * ip_ptr, int len) {
     uint16_t ip_sum = ip_ptr->ip_sum;
     ipHdr->ip_sum = 0x0000;
-    uint16_t ck_sum = cksum(ip_ptr, sizeof(ip_hdr));
+    uint16_t ck_sum = cksum(ip_ptr, len);
     ip_ptr->ip_sum = ip_sum;
     return ck_sum;
 }
@@ -276,6 +323,15 @@ SimpleRouter::getIcmpT3Sum(simple_router::icmp_t3_hdr * icmp_t3_ptr) {
     icmp_t3_ptr->icmp_sum = 0x0000;
     uint16_t ck_sum = cksum(icmp_t3_ptr, sizeof(icmp_t3_hdr));
     icmp_t3_ptr->icmp_sum = icmp_sum;
+    return ck_sum;
+}
+
+uint16_t
+SimpleRouter::getIcmpSum(simple_router::icmp_hdr * icmp_ptr) {
+    uint16_t icmp_sum = icmp_ptr->icmp_sum;
+    icmp_ptr->icmp_sum = 0x0000;
+    uint16_t ck_sum = cksum(icmp_t3_ptr, sizeof(icmp_hdr));
+    icmp_ptr->icmp_sum = icmp_sum;
     return ck_sum;
 }
 //////////////////////////////////////////////////////////////////////////

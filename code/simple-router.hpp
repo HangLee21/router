@@ -116,18 +116,21 @@ public:
      */
     struct ip_hdr*
     getIPV4Header(const struct simple_router::ethernet_hdr *ethe_header);
-
     /**
      * Get ARP header
      */
     struct arp_hdr*
     getARPHeader(const struct simple_router::ethernet_hdr *ethe_header);
     /**
+     * Get ICMP header
+     */
+    struct icmp_hdr*
+    getICMPHeader(const struct simple_router::ip_hdr *);
+    /**
      * handle IPv4 packet
      */
     void
     handleIPV4Packet(const Buffer& packet, const std::string& Iface, const struct simple_router::ethernet_hdr* ether_hdr);
-
     /**
      * handle ARP packet
      */
@@ -154,7 +157,7 @@ public:
      icmp_hdr
      makeIcmpHeader(enum icmptype, enum icmpcode, const uint8_t* );
     /**
-     * make Icmp header
+     * make Icmp T3 header
      */
      icmp_t3_hdr
      makeIcmpT3Header(enum icmptype, enum icmpcode, const uint8_t* );
@@ -164,20 +167,25 @@ public:
      Buffer
      makeArpPacket(ethernet_hdr ethe_request, arp_hdr arp_request);
     /**
-     * make ARP packet
+     * make IcmpT3 packet
      */
      Buffer
      makeIcmpT3Packet(ethernet_hdr, ip_hdr, icmp_t3_hdr);
     /**
-     * make ARP packet
+     * get Ip sum
      */
      uint16_t
      getIpSum(ip_hdr*);
     /**
-     * make ARP packet
+     * get Icmp t3 sum
      */
      uint16_t
      getIcmpT3Sum(icmp_t3_hdr*);
+    /**
+     * get Icmp t3 sum
+     */
+     uint16_t
+     getIcmpSum(icmp_hdr*, int len);
 
 
 
