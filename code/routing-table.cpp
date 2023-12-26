@@ -33,8 +33,33 @@ RoutingTable::lookup(uint32_t ip) const
 {
 
   // FILL THIS IN
+  RoutingTableEntry target;
+  int longestPrefixLength = -1;
+  for (const auto& entry : m_entries) {
+      uint32_t dst = ntohl(entry.dest);
+      uint32_t mask = ntohl(entry.mask);
+      // Apply the mask to the IP address to get the network part
+      uint32_t networkPart = ip & mask;
 
-  throw std::runtime_error("Routing entry not found");
+      if(networkPart == (dst & mask)){
+          // Calculate the prefix length by counting the number of leading 1s in the mask
+          int prefixLength = 0;
+          while (mask & (1u << 31)) {
+              prefixLength++;
+              mask <<= 1;
+          }
+
+          // Update the longest match if the current prefix length is longer
+          if (prefixLength > longestPrefixLength) {
+              longestPrefixLength = prefixLength;
+              target = entry;
+          }
+      }
+  }
+  if(longestPrefixLength < 0){
+      throw std::runtime_error("Routing entry not found");
+  }
+  return target;
 }
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////

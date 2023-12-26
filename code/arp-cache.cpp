@@ -32,7 +32,65 @@ ArpCache::periodicCheckArpRequestsAndCacheEntries()
 {
 
   // FILL THIS IN
+    for(auto it = m_cacheEntries.begin(); it != m_cacheEntries.end(); it++){
+        auto entry = *it;
+        if(!entry->isValid){
+            m_cacheEntries.erase(it);
+        }
+    }
 
+    for(auto request: m_arpRequests){
+        if(request->nTimesSent >= 5){
+            std::cout << "Arp not received, removing request" << std::endl;
+            for(auto it = request->packets.begin(); it != request->packets.end(); it++){
+                ethernet_hdr*ether_hdr = m_router.getEthernetHeader(it->packet);
+                ip_hdr* ipHdr = m_router.getIPV4Header(it->packet);
+                RoutingTableEntry route_entry = m_router.getRoutingTable().lookup(ntohl(ipHdr->ip_src));
+                const Interface* iface = m_router.findIfaceByName(route_entry.ifName);
+                struct ethernet_hdr ethernetHdr = makeEthernetHeader(ether_hdr, iface);
+                struct ip_hdr ipHdr1 = makeIPV4Header(ip_protocol_icmp, ipHdr, iface);
+                struct icmp_t3_hdr icmpT3Hdr = makeIcmpT3Header(icmp_type_time_exceeded, icmp_code_time_exceeded, (uint8_t*)ipHdr);
+
+                ipHdr1.ip_len = htons(sizeof(ip_hdr) + sizeof(icmp_t3_hdr));
+                ipHdr1.ip_sum = getIpSum(&ipHdr1);
+
+                Buffer buffer_reply = makeIcmpT3Packet(ethernetHdr, ipHdr1, icmpT3Hdr);
+                sendPacket(buffer_reply, Iface);
+                std::cerr << "Send Icmp t3 packet in Arp Cache" << std::endl;
+                print_hdrs(packet);
+            }
+            m_arpRequests.remove(request);
+        }
+        else{
+            request->timeSent = std::chrono::steady_clock::now();
+            request->nTimesSent++;
+
+            RoutingTableEntry route_entry = m_router.getRoutingTable().lookup(ntohl(request->ip));
+            const Interface* iface = m_router.findIfaceByName(route_entry.ifName);
+            unsigned char tha[6] = {0, 0, 0, 0, 0, 0};
+            arp_hdr arpHdr;
+            arpHdr.arp_hrd = htons(arp_hrd_ethernet);
+            arpHdr.arp_pro = htons(ethertype_ip);
+            arpHdr.arp_op = htons(arp_op_request);
+            arpHdr.arp_hln = 0x06;
+            arpHdr.arp_pln = 0x04;
+            std::copy(iface->addr.data(), iface->addr.data() + 6, arpHdr.arp_sha);
+            arpHdr.arp_sip = iface->ip;
+            std::copy(tha, tha + 6, arpHdr.arp_tha);
+            arpHdr.arp_tip = request->ip;
+
+            const Buffer broadcast_host = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+            ethernet_hdr ethernetHdr;
+            ethernetHdr.ether_type = ethertype_arp;
+            std::copy(iface->addr.data(), iface->addr.data() + 6, ethernetHdr.ether_shost);
+            std::copy(broadcast_host.data(), broadcast_host.data() + 6, ethernetHdr.ether_dhost);
+
+            Buffer packet = m_router.makeArpPacket(ethernetHdr, arpHdr);
+            m_router.sendPacket(packet, iface->name);
+            std:cerr << "Send Packet in Arp Cache" << std::endl;
+            print_hdrs(packet);
+        }
+    }
 }
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////

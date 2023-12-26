@@ -25,7 +25,7 @@ namespace simple_router {
 //////////////////////////////////////////////////////////////////////////
 // IMPLEMENT THIS METHOD
 
-const Buffer broadcase_host = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+const Buffer broadcast_host = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
 void
 SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
@@ -43,7 +43,7 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
   // FILL THIS IN
     struct ethernet_hdr* ethernetHdr = getEthernetHeader(packet);
     Buffer buffer(ethernetHdr->ether_dhost, ethernetHdr->ether_dhost + 6);
-    if(buffer != broadcase_host && findIfaceByMac(buffer) == nullptr ){
+    if(buffer != broadcast_host && findIfaceByMac(buffer) == nullptr ){
         std::cerr << "Ethernet destination is not in this router, ignoring" << std::endl;
         return;
     }
@@ -160,33 +160,39 @@ SimpleRouter::handleIPV4Packet(const Buffer& packet, const std::string& Iface,
         }
         else{
             ethernet_hdr * eth_ptr = getEthernetHeader(packet);
-            RoutingTableEntry route_entry = m_routingTable.lookup(ntohl(ipHdr->ip_dst));
-            ipHdr->ip_sum = getIpSum(ipHdr);
-            const Interface * iface_ptr = findIfaceByName(route_entry.ifName);
+            try{
+                RoutingTableEntry route_entry = m_routingTable.lookup(ntohl(ipHdr->ip_dst));
+                ipHdr->ip_sum = getIpSum(ipHdr);
+                const Interface * iface_ptr = findIfaceByName(route_entry.ifName);
 
-            std::copy(ether_hdr->ether_shost, ether_hdr->ether_shost + 6, eth_ptr->ether_dhost);
-            std::copy(iface_ptr->addr.begin(), iface_ptr->addr.end(), eth_ptr->ether_shost);
+                std::copy(ether_hdr->ether_shost, ether_hdr->ether_shost + 6, eth_ptr->ether_dhost);
+                std::copy(iface_ptr->addr.begin(), iface_ptr->addr.end(), eth_ptr->ether_shost);
 
-            std::shared_ptr<simple_router::ArpEntry> arp_entry;
-            uint32_t targetIp;
-            // TODO ??? why need this
-            if(route_entry.ifName=="sw0-eth3"){
-                arp_entry = m_arp.lookup(route_entry.gw);
-                targetIp = route_entry.gw;
-            }
-            else{
-                arp_entry = m_arp.lookup(ipHdr->ip_dst);
-                targetIp = ipHdr->ip_dst;
-            }
+                std::shared_ptr<simple_router::ArpEntry> arp_entry;
+                uint32_t targetIp;
+                // TODO ??? why need this
+                if(route_entry.ifName=="sw0-eth3"){
+                    arp_entry = m_arp.lookup(route_entry.gw);
+                    targetIp = route_entry.gw;
+                }
+                else{
+                    arp_entry = m_arp.lookup(ipHdr->ip_dst);
+                    targetIp = ipHdr->ip_dst;
+                }
 
-            if(arp_entry == nullptr){
-                m_arp.queueRequest(targetIp, packet, route_entry.ifName);
+                if(arp_entry == nullptr){
+                    m_arp.queueRequest(targetIp, packet, route_entry.ifName);
+                }
+                else{
+                    std::copy(arp_entry->mac.begin(), arp_entry->mac.end(), eth_ptr->ether_dhost);
+                    sendPacket(packet, route_entry.ifName);
+                    std::cerr << "Send IPv4 in iface is nullptr" << std::endl;
+                    print_hdrs(packet);
+                }
             }
-            else{
-                std::copy(arp_entry->mac.begin(), arp_entry->mac.end(), eth_ptr->ether_dhost);
-                sendPacket(packet, route_entry.ifName);
-                std::cerr << "Send IPv4 in iface is nullptr" << std::endl;
-                print_hdrs(packet);
+            catch (std::runtime_error){
+                std::cerr << "Entry Not Found" << std::endl;
+                return;
             }
         }
 
