@@ -33,6 +33,7 @@ RoutingTable::lookup(uint32_t ip) const
 {
 
   // FILL THIS IN
+
   RoutingTableEntry target;
   int longestPrefixLength = -1;
   for (const auto& entry : m_entries) {

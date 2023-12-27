@@ -39,10 +39,15 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
   }
 
   std::cerr << getRoutingTable() << std::endl;
-  std::cerr << "handle packet" << std::endl;
   // FILL THIS IN
+//    std::cout << "Size of icmp_t3_hdr: " << sizeof(icmp_t3_hdr) << " bytes" << std::endl;
+//    std::cout << "Size of icmp_hdr: " << sizeof(icmp_hdr) << " bytes" << std::endl;
+//    std::cout << "Size of eth_hdr: " << sizeof(ethernet_hdr) << " bytes" << std::endl;
+//    std::cout << "Size of ip_hdr: " << sizeof(ip_hdr) << " bytes" << std::endl;
     struct ethernet_hdr* ethernetHdr = getEthernetHeader(packet);
     Buffer buffer(ethernetHdr->ether_dhost, ethernetHdr->ether_dhost + 6);
+    std::cout << "Origin Packet" << std::endl;
+    print_hdrs(packet);
     if(buffer != broadcast_host && findIfaceByMac(buffer) == nullptr ){
         std::cerr << "Ethernet destination is not in this router, ignoring" << std::endl;
         return;
@@ -50,10 +55,12 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
 
 
     if(ethernetHdr->ether_type == ntohs(ethertype_ip)) {
+        std::cout << "IPV4" << std::endl;
         handleIPV4Packet(packet, inIface, ethernetHdr);
     }
 
     if(ethernetHdr->ether_type == ntohs(ethertype_arp)) {
+        std::cout << "ARP" << std::endl;
         handleARPPacket(packet, inIface, ethernetHdr);
     }
 }
@@ -96,7 +103,6 @@ SimpleRouter::handleARPPacket(const simple_router::Buffer &packet, const std::st
         struct ethernet_hdr e_hdr = makeEthernetHeader(ether_hdr, iface);
         Buffer packet_reply = makeArpPacket(e_hdr, a_hdr);
 
-        print_hdrs(packet_reply);
         sendPacket(packet_reply, inIface);
         std::cerr << "Send Arp packet in request" << std::endl;
         print_hdrs(packet_reply);
@@ -132,6 +138,7 @@ SimpleRouter::handleIPV4Packet(const Buffer& packet, const std::string& Iface,
       const struct simple_router::ethernet_hdr* ether_hdr){
     ip_hdr * ipHdr = getIPV4Header(ether_hdr);
     uint16_t ck_sum = getIpSum(ipHdr);
+    const Interface* iface = findIfaceByName(Iface);
     // check sum
     if(ipHdr->ip_sum != ck_sum){
         std::cerr << ck_sum << ' ' << ipHdr->ip_sum << std::endl;
@@ -140,9 +147,8 @@ SimpleRouter::handleIPV4Packet(const Buffer& packet, const std::string& Iface,
     }
 
     // check if destined to the router
-    const Interface *iface = findIfaceByIp(ipHdr->ip_dst);
-
-    if(iface == nullptr){
+    const Interface *target_face = findIfaceByIp(ipHdr->ip_dst);
+    if(target_face == nullptr){
         ipHdr->ip_ttl--;
         if(ipHdr->ip_ttl <= 0){
             struct ethernet_hdr ethernetHdr = makeEthernetHeader(ether_hdr, iface);
@@ -170,8 +176,9 @@ SimpleRouter::handleIPV4Packet(const Buffer& packet, const std::string& Iface,
 
                 std::shared_ptr<simple_router::ArpEntry> arp_entry;
                 uint32_t targetIp;
-                // TODO ??? why need this
-                if(route_entry.ifName=="sw0-eth3"){
+                // destination is 0.0.0.0
+                if(route_entry.dest = 0x0000){
+                    std::cout <<route_entry.mask << std::endl;
                     arp_entry = m_arp.lookup(route_entry.gw);
                     targetIp = route_entry.gw;
                 }
@@ -200,9 +207,9 @@ SimpleRouter::handleIPV4Packet(const Buffer& packet, const std::string& Iface,
     else{
         if(ipHdr->ip_p == ip_protocol_icmp){
             icmp_hdr* icmp_ptr = getICMPHeader(ipHdr);
-            // TODO why need to minus 20
             if(icmp_ptr->icmp_type == icmp_type_echo_request){
-                const uint16_t icmp_size = ntohs(ipHdr->ip_len) - 20;
+                // ipHDR->ip_len = sizeof(ip_hdr) + sizeof(icmp_ptr)
+                const uint16_t icmp_size = ntohs(ipHdr->ip_len) - sizeof(ip_hdr);
                 uint16_t ck_sum = getIcmpSum(icmp_ptr, icmp_size);
 
                 if(ck_sum != icmp_ptr->icmp_sum){
@@ -237,7 +244,7 @@ SimpleRouter::handleIPV4Packet(const Buffer& packet, const std::string& Iface,
 
             Buffer buffer_reply = makeIcmpT3Packet(ethernetHdr, ipHdr1, icmpT3Hdr);
             sendPacket(buffer_reply, Iface);
-            std::cerr << "Send Icmp t3 packet in time exceed" << std::endl;
+            std::cerr << "Send Icmp t3 packet in tcp and udp" << std::endl;
             print_hdrs(packet);
             return;
         }
