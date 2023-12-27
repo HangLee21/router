@@ -45,7 +45,6 @@ ArpCache::periodicCheckArpRequestsAndCacheEntries()
     for(auto it = m_arpRequests.begin(); it != m_arpRequests.end(); ){
         auto request = *it;
         if(request->nTimesSent >= 5){
-            std::cout << "Arp not received, removing request" << std::endl;
             for(auto it = request->packets.begin(); it != request->packets.end(); it++){
                 ethernet_hdr*ether_hdr = m_router.getEthernetHeader(it->packet);
                 ip_hdr* ipHdr = m_router.getIPV4Header(ether_hdr);
@@ -64,7 +63,7 @@ ArpCache::periodicCheckArpRequestsAndCacheEntries()
                 print_hdrs(buffer_reply);
             }
             it = m_arpRequests.erase(it);
-            std::cout << "Arp not received: removed" << std::endl;
+            std::cout << "Remove unreceived Arp request" << std::endl;
         }
         else{
             it++;
