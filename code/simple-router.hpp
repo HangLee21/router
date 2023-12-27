@@ -172,7 +172,7 @@ public:
      Buffer
      makeIcmpT3Packet(ethernet_hdr, ip_hdr, icmp_t3_hdr);
     /**
-     * make IcmpT3 packet
+     * make IPV4 packet
      */
      Buffer
      makeIPV4Packet(ethernet_hdr, ip_hdr);
@@ -187,7 +187,7 @@ public:
      uint16_t
      getIcmpT3Sum(icmp_t3_hdr*);
     /**
-     * get Icmp t3 sum
+     * get Icmp sum
      */
      uint16_t
      getIcmpSum(icmp_hdr*, int len);
