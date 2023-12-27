@@ -145,8 +145,7 @@ SimpleRouter::handleIPV4Packet(const Buffer& packet, const std::string& Iface,
         std::cerr << "sum not correct";
         return;
     }
-
-    // check if destined to the router
+    // check destination
     const Interface *target_face = findIfaceByIp(ipHdr->ip_dst);
     if(target_face == nullptr){
         ipHdr->ip_ttl--;
